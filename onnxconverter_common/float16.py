@@ -262,6 +262,7 @@ def convert_float_to_float16(
 
     sort_topology(model.graph)
     remove_unnecessary_cast_node(model.graph)
+    update_cast_attribute(model.graph)
 
     return model
 
@@ -794,6 +795,34 @@ def remove_unnecessary_cast_node(graph_proto: onnx_proto.GraphProto):
     for cast_node_pair in remove_candidate:
         graph_proto.node.remove(cast_node_pair[0])
         graph_proto.node.remove(cast_node_pair[1])
+
+
+# Update Cast attribulte "to" so that it matches the dtype of its output
+def update_cast_attribute(graph_proto):
+    assert isinstance(graph_proto, onnx_proto.GraphProto)
+
+    # make a map from name to value info
+    value_info_dict = {}
+    for value_info in itertools.chain(
+        graph_proto.output, graph_proto.input, graph_proto.value_info
+    ):
+        value_info_dict[value_info.name] = value_info
+
+    # update Cast attribute "to"
+    for node in graph_proto.node:
+        if node.op_type == "Cast":
+            for attr in node.attribute:
+                if attr.name == "to":
+                    attr.i = value_info_dict[node.output[0]].type.tensor_type.elem_type
+
+    # recursively update for subgraphs
+    for node in graph_proto.node:
+        for attr in node.attribute:
+            if isinstance(attr.g, onnx_proto.GraphProto) and len(attr.g.node) > 0:
+                update_cast_attribute(attr.g)
+            for g in attr.graphs:
+                if isinstance(g, onnx_proto.GraphProto):
+                    update_cast_attribute(g)
 
 
 # Check if the model is already converted to float16
