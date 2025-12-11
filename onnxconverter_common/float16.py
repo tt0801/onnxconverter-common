@@ -492,6 +492,16 @@ def process_initializers(
     # Process initializers
     for initializer in graph.initializer:
         if initializer.data_type == onnx_proto.TensorProto.FLOAT:
+            all_nodes_are_blocked = all(
+                [
+                    (node.op_type in op_block_list) or (node.name in node_block_list)
+                    for node in input_name_to_nodes_dict[initializer.name]
+                ]
+            )
+            # skip conversion
+            if all_nodes_are_blocked:
+                continue
+            
             # convert initializer from float to float16
             convert_tensor_float_to_float16(
                 initializer, min_positive_val, max_finite_val
