@@ -187,6 +187,14 @@ def initial_checking(model, disable_shape_infer):
     if func_infer_shape is not None:
         model = func_infer_shape(model)
 
+    # If a TensorProto appears in both value_info and output, a type-mismatch error may occur,
+    # especially when keep_io_types is true.
+    # onnx.shape_inference.infer_shapes may add a TensorProto to value_info even when one with
+    # the same name already exists in output.
+    for output in model.graph.output:
+        if output in model.graph.value_info:
+            model.graph.value_info.remove(output)
+
     is_fp16_ready_flag = check_if_fp16_ready(model.graph)
 
     return model, func_infer_shape, is_fp16_ready_flag
